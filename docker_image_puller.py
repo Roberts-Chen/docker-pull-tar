@@ -289,6 +289,7 @@ def cleanup_tmp_dir():
 
 def main():
     """主函数"""
+    global auth_url
     try:
         parser = argparse.ArgumentParser(description="Docker 镜像拉取工具")
         parser.add_argument("-i", "--image", required=False, help="Docker 镜像名称（例如：nginx:latest 或 harbor.abc.com/abc/nginx:1.26.0）")
@@ -336,12 +337,26 @@ def main():
             args.password = input("请输入镜像仓库密码: ").strip()
         session = create_session()
         auth_head = None
+        auth_url, reg_service = '', ''
         try:
             url = f'https://{registry}/v2/'
             logger.debug(f"获取认证信息 CURL 命令: curl '{url}'")
             resp = session.get(url, verify=False, timeout=30)
-            auth_url = resp.headers['WWW-Authenticate'].split('"')[1]
-            reg_service = resp.headers['WWW-Authenticate'].split('"')[3]
+
+            if resp.status_code == 401:
+                # 存在认证信息，才解析
+                if 'WWW-Authenticate' in resp.headers:
+                    auth_url = resp.headers['WWW-Authenticate'].split('"')[1]
+                    reg_service = resp.headers['WWW-Authenticate'].split('"')[3]
+                else:
+                    logger.error("仓库需要认证，但未返回 WWW-Authenticate 头")
+            elif resp.status_code == 200:
+                # 无需认证，直接跳过
+                logger.info("仓库允许匿名访问，无需认证")
+            else:
+                logger.error(f"请求仓库失败，状态码: {resp.status_code}")
+            # auth_url = resp.headers['WWW-Authenticate'].split('"')[1]
+            # reg_service = resp.headers['WWW-Authenticate'].split('"')[3]
             auth_head = get_auth_head(session, auth_url, reg_service, repository, args.username, args.password)
             # 获取清单
             resp, http_code = fetch_manifest(session, registry, repository, tag, auth_head)
