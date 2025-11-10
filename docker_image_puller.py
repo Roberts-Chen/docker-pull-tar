@@ -5,6 +5,8 @@ import json
 import hashlib
 import shutil
 import threading
+from time import sleep
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -28,7 +30,7 @@ urllib3.disable_warnings()
 VERSION = "v1.1.0"
 
 # 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', encoding='utf-8')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s', encoding='utf-8')
 logger = logging.getLogger(__name__)
 
 stop_event = threading.Event()
@@ -115,7 +117,9 @@ def get_auth_head(session, auth_url, reg_service, repository, username=None, pas
         
         # 打印 curl 命令
         logger.debug(f"获取认证头 CURL 命令: curl '{url}'")
-        
+
+        logger.info(f"请求地址：{url}，请求头：{headers}")
+
         resp = session.get(url, headers=headers, verify=False, timeout=30)
         resp.raise_for_status()
         access_token = resp.json()['token']
@@ -266,6 +270,7 @@ def download_layers(session, registry, repository, layers, auth_head, imgdir, re
 def create_image_tar(imgdir, repository, tag, arch):
     """将镜像打包为 tar 文件"""
     safe_repo = repository.replace("/", "_")
+    arch = arch or "amd64"
     docker_tar = f'{safe_repo}_{tag}_{arch}.tar'
     try:
         with tarfile.open(docker_tar, "w") as tar:
@@ -303,6 +308,8 @@ def main():
 
         # 显示程序的信息
         logger.info(f'欢迎使用 Docker 镜像拉取工具 {VERSION}')
+
+        sleep(1)
 
         args = parser.parse_args()
 
@@ -435,7 +442,9 @@ def main():
         else:
             # 
             imgparts = repository.split('/')[:-1]  
-        
+
+
+        logger.info(f"镜像信息：{resp_json}")
         download_layers(session, registry, repository, resp_json['layers'], auth_head, imgdir, resp_json, imgparts, img, tag)
 
         # 打包镜像
